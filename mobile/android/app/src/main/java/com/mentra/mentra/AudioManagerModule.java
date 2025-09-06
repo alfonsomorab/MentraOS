@@ -9,6 +9,8 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.Arguments;
 
 import android.content.Intent;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -19,6 +21,9 @@ import androidx.annotation.NonNull;
 public class AudioManagerModule extends ReactContextBaseJavaModule {
     private static final String TAG = "AudioManagerModule";
     private ReactApplicationContext reactContext;
+    private static boolean sttPaused = false;
+    private Handler timeoutHandler = new Handler(Looper.getMainLooper());
+    private Runnable currentTimeoutRunnable;
 
     public AudioManagerModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -51,9 +56,8 @@ public class AudioManagerModule extends ReactContextBaseJavaModule {
                 .emit("AudioPlayResponse", params);
         }
 
-        if (success) {
-            sendSTTPauseCommand(false);  // Resume STT processing
-        }
+        // Always resume STT regardless of success/failure
+        sendSTTPauseCommand(false);  // Resume STT processing
 
         Log.d(TAG, "Sent audio play response - requestId: " + requestId + ", success: " + success + ", error: " + error);
     }
@@ -84,7 +88,9 @@ public class AudioManagerModule extends ReactContextBaseJavaModule {
 
             promise.resolve("Audio play started");
         } catch (Exception e) {
-            Log.e(TAG, "Failed to play audio", e);
+            // CRITICAL: Resume STT if audio failed to start
+            sendSTTPauseCommand(false);
+            Log.e(TAG, "Failed to play audio, resuming STT", e);
             promise.reject("AUDIO_PLAY_ERROR", e.getMessage(), e);
         }
     }
@@ -120,9 +126,38 @@ public class AudioManagerModule extends ReactContextBaseJavaModule {
     }
 
     private void sendSTTPauseCommand(boolean pauseSTT) {
+        // Prevent redundant commands
+        if (sttPaused == pauseSTT) {
+            Log.d(TAG, "STT already in requested state: " + pauseSTT);
+            return;
+        }
+        
+        sttPaused = pauseSTT;
         Intent intent = new Intent("com.augmentos.augmentos_core.STT_CONTROL");
         intent.putExtra("pause_stt", pauseSTT);
         intent.putExtra("source", "mobile_audio_manager");
         reactContext.sendBroadcast(intent);
+        
+        if (pauseSTT) {
+            // Cancel any existing timeout first
+            if (currentTimeoutRunnable != null) {
+                timeoutHandler.removeCallbacks(currentTimeoutRunnable);
+            }
+            
+            // Create new timeout
+            currentTimeoutRunnable = () -> {
+                if (sttPaused) {
+                    Log.w(TAG, "STT timeout safety - force resuming STT after 30s");
+                    sendSTTPauseCommand(false);
+                }
+            };
+            timeoutHandler.postDelayed(currentTimeoutRunnable, 30000);
+        } else {
+            // Cancel timeout when manually resuming
+            if (currentTimeoutRunnable != null) {
+                timeoutHandler.removeCallbacks(currentTimeoutRunnable);
+                currentTimeoutRunnable = null;
+            }
+        }
     }
 }
