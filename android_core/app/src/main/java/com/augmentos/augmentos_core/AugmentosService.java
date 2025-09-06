@@ -553,7 +553,11 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
         // Register STT control receiver for mobile audio commands
         sttControlReceiver = new STTControlReceiver();
         IntentFilter sttFilter = new IntentFilter("com.augmentos.augmentos_core.STT_CONTROL");
-        registerReceiver(sttControlReceiver, sttFilter);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(sttControlReceiver, sttFilter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(sttControlReceiver, sttFilter);
+        }
 
         ServerComms.getInstance(this);
 
