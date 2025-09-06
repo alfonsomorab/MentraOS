@@ -56,8 +56,9 @@ public class AudioManagerModule extends ReactContextBaseJavaModule {
                 .emit("AudioPlayResponse", params);
         }
 
-        // Always resume STT regardless of success/failure
-        sendSTTPauseCommand(false);  // Resume STT processing
+        if (success) {
+            sendSTTPauseCommand(false);  // Resume STT processing
+        }
 
         Log.d(TAG, "Sent audio play response - requestId: " + requestId + ", success: " + success + ", error: " + error);
     }
