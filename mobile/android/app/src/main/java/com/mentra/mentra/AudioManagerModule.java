@@ -8,6 +8,7 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.Arguments;
 
+import android.content.Intent;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -50,6 +51,10 @@ public class AudioManagerModule extends ReactContextBaseJavaModule {
                 .emit("AudioPlayResponse", params);
         }
 
+        if (success) {
+            sendSTTPauseCommand(false);  // Resume STT processing
+        }
+
         Log.d(TAG, "Sent audio play response - requestId: " + requestId + ", success: " + success + ", error: " + error);
     }
 
@@ -63,6 +68,7 @@ public class AudioManagerModule extends ReactContextBaseJavaModule {
     ) {
         try {
             Log.d(TAG, "playAudio called with requestId: " + requestId);
+            sendSTTPauseCommand(true);  // Pause STT processing
 
             AudioManager audioManager = AudioManager.getInstance(reactContext);
 
@@ -111,5 +117,12 @@ public class AudioManagerModule extends ReactContextBaseJavaModule {
             Log.e(TAG, "Failed to stop all audio", e);
             promise.reject("AUDIO_STOP_ALL_ERROR", e.getMessage(), e);
         }
+    }
+
+    private void sendSTTPauseCommand(boolean pauseSTT) {
+        Intent intent = new Intent("com.augmentos.augmentos_core.STT_CONTROL");
+        intent.putExtra("pause_stt", pauseSTT);
+        intent.putExtra("source", "mobile_audio_manager");
+        reactContext.sendBroadcast(intent);
     }
 }

@@ -19,9 +19,11 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -65,6 +67,7 @@ import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.Glass
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.HeadUpAngleEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.KeepAliveAckEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.MicModeChangedEvent;
+import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.PauseAsrEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.eventbusmessages.RtmpStreamStatusEvent;
 import com.augmentos.augmentos_core.smarterglassesmanager.supportedglasses.SmartGlassesDevice;
 import com.augmentos.augmentos_core.smarterglassesmanager.utils.BitmapJavaUtils;
@@ -161,6 +164,8 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
     public SmartGlassesManager smartGlassesManager;
     private boolean smartGlassesManagerBound = false;
     private final List<Runnable> smartGlassesReadyListeners = new ArrayList<>();
+    
+    private STTControlReceiver sttControlReceiver;
 
     private byte[] hexStringToByteArray(String hex) {
         int len = hex.length();
@@ -544,6 +549,11 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
 
         EventBus.getDefault().register(this);
         Log.d(TAG, "🔔 EventBus registration completed for AugmentosService");
+        
+        // Register STT control receiver for mobile audio commands
+        sttControlReceiver = new STTControlReceiver();
+        IntentFilter sttFilter = new IntentFilter("com.augmentos.augmentos_core.STT_CONTROL");
+        registerReceiver(sttControlReceiver, sttFilter);
 
         ServerComms.getInstance(this);
 
@@ -2957,6 +2967,15 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
         } catch (Exception e) {
             Log.e(TAG, "Error unregistering from EventBus", e);
         }
+        
+        // Unregister STT control receiver
+        try {
+            if (sttControlReceiver != null) {
+                unregisterReceiver(sttControlReceiver);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error unregistering STT BroadcastReceiver", e);
+        }
 
         // Stop periodic datetime sending
         datetimeHandler.removeCallbacks(datetimeRunnable);
@@ -3349,6 +3368,19 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
             smartGlassesManager.stopVideoRecording(requestId);
         } else {
             Log.e(TAG, "SmartGlassesManager is null, cannot stop video recording");
+        }
+    }
+
+    private class STTControlReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if ("com.augmentos.augmentos_core.STT_CONTROL".equals(intent.getAction())) {
+                boolean pauseSTT = intent.getBooleanExtra("pause_stt", false);
+                String source = intent.getStringExtra("source");
+                
+                // Post the same event that native TTS uses
+                EventBus.getDefault().post(new PauseAsrEvent(pauseSTT));
+            }
         }
     }
 }
