@@ -554,7 +554,7 @@ public class AugmentosService extends LifecycleService implements AugmentOsActio
         sttControlReceiver = new STTControlReceiver();
         IntentFilter sttFilter = new IntentFilter("com.augmentos.augmentos_core.STT_CONTROL");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(sttControlReceiver, sttFilter, Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(sttControlReceiver, sttFilter, Context.RECEIVER_EXPORTED);
         } else {
             registerReceiver(sttControlReceiver, sttFilter);
         }
